@@ -90,11 +90,12 @@ template <typename Dtype>
 void ConcatLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   if (bottom.size() == 1) { return; }
+  // Trim layer input
   if (this->is_quantized_) {
-    // Trim layer input
     if (this->phase_ == TEST) {
-        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
-            bottom[0]->count());
+      for (int i = 0; i < bottom.size(); ++i) {
+        this->QuantizeLayerInputs_cpu(bottom[i]->mutable_cpu_data(), bottom[i]->count());
+      }
     }
   }
 
@@ -113,10 +114,10 @@ void ConcatLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     offset_concat_axis += bottom_concat_axis;
   }
 
+  // Trim layer output
   if (this->is_quantized_) {
-    // Trim layer output
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+      this->QuantizeLayerOutputs_cpu(top[0]->mutable_cpu_data(), top[0]->count());
     }
   }
 }

@@ -41,11 +41,10 @@ ReLULayer<Dtype>::ReLULayer(const LayerParameter& param)
 template <typename Dtype>
 void ReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  // Trim layer input
   if (this->is_quantized_) {
-    // Trim layer input
     if (this->phase_ == TEST) {
-        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
-            bottom[0]->count());
+      this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(), bottom[0]->count());
     }
   }
 
@@ -58,10 +57,10 @@ void ReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         + negative_slope * std::min(bottom_data[i], Dtype(0));
   }
 
+  // Trim layer output
   if (this->is_quantized_) {
-    // Trim layer output
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+      this->QuantizeLayerOutputs_cpu(top[0]->mutable_cpu_data(), top[0]->count());
     }
   }
 }

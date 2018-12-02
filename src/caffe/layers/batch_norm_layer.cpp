@@ -134,14 +134,20 @@ void BatchNormLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  // Trim layer input
   if (this->is_quantized_) {
-    // Trim layer input
     if (this->phase_ == TEST) {
-        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
-            bottom[0]->count());
+      for (int i = 0; i < bottom.size(); ++i) {
+        this->QuantizeLayerInputs_cpu(bottom[i]->mutable_cpu_data(), bottom[i]->count());
+      }
     }
+  }
 
-    // Trim weights
+  // Trim weights
+  const Dtype* weight = NULL;
+  const Dtype* bias = NULL;
+  const Dtype* scale = NULL;
+  if (this->is_quantized_) {
     caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
       this->weights_quantized_[0]->mutable_cpu_data());
     caffe_copy(this->blobs_[1]->count(), this->blobs_[1]->cpu_data(),
@@ -152,12 +158,7 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     int rounding = this->phase_ == TEST ? this->rounding_ :
         QuantizationParameter_Rounding_STOCHASTIC;
     this->QuantizeWeights_cpu(this->weights_quantized_, rounding, true);
-  }
 
-  const Dtype* weight = NULL;
-  const Dtype* bias = NULL;
-  const Dtype* scale = NULL;
-  if (this->is_quantized_) {
     weight = this->weights_quantized_[0]->cpu_data();
     bias = this->weights_quantized_[1]->cpu_data();
     scale = this->weights_quantized_[2]->cpu_data();
@@ -245,10 +246,10 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   caffe_copy(x_norm_.count(), top_data,
       x_norm_.mutable_cpu_data());
 
+  // Trim layer output
   if (this->is_quantized_) {
-    // Trim layer output
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+      this->QuantizeLayerOutputs_cpu(top[0]->mutable_cpu_data(), top[0]->count());
     }
   }
 }

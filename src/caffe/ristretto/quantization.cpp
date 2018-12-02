@@ -65,6 +65,15 @@ void Quantization::QuantizeNet() {
       LOG(FATAL) << "Unknown trimming mode: " << trimming_mode_;
     }
   }
+
+  // Free memmory
+  max_in_.clear();
+  max_params_.clear();
+  max_out_.clear();
+  il_in_.clear();
+  il_params_.clear();
+  il_out_.clear();
+  layer_names_.clear();
 }
 
 void Quantization::CheckWritePermissions(const string path) {
@@ -231,9 +240,10 @@ void Quantization::DoQuantization() {
   LOG(INFO) << "------------------------------";
   LOG(INFO) << "Network accuracy analysis for " << trimming_mode_;
   LOG(INFO) << "Baseline 32bit float: " << test_score_baseline_;
-  LOG(INFO) << static_bitwidth_ << "bit weights,";
-  LOG(INFO) << static_bitwidth_ << "bit activations,";
-  LOG(INFO) << "Accuracy: " << accuracy << " ("
+  LOG(INFO) << "Quantization:";
+  LOG(INFO) << "\t" << static_bitwidth_ << "bit weights,";
+  LOG(INFO) << "\t" << static_bitwidth_ << "bit activations,";
+  LOG(INFO) << "\tAccuracy: " << accuracy << " ("
     << (accuracy-test_score_baseline_)/test_score_baseline_*100 << " %)";
   LOG(INFO) << "Please fine-tune.";
 }

@@ -157,11 +157,10 @@ __global__ void StoPoolForwardTest(const int nthreads,
 template <typename Dtype>
 void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+  // Trim layer input
   if (this->is_quantized_) {
-    // Trim layer input
     if (this->phase_ == TEST) {
-        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
-            bottom[0]->count());
+      this->QuantizeLayerInputs_cpu(bottom[0]->mutable_gpu_data(), bottom[0]->count());
     }
   }
 
@@ -218,10 +217,10 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     LOG(FATAL) << "Unknown pooling method.";
   }
 
+  // Trim layer output
   if (this->is_quantized_) {
-    // Trim layer output
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+      this->QuantizeLayerOutputs_cpu(top[0]->mutable_gpu_data(), top[0]->count());
     }
   }
   CUDA_POST_KERNEL_CHECK;

@@ -106,14 +106,18 @@ void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
   if (this->is_quantized_) {
     // Prepare quantized weights
-    const int num_axes = param.num_axes();
-    this->weights_quantized_.resize(1);
-    const vector<int>::const_iterator& shape_start =
+    if (bottom.size() == 1 && this->blobs_.size() > 0) {
+      LOG(INFO) << "Skipping parameter initialization";
+    } else if (bottom.size() == 1) {
+      const int num_axes = param.num_axes();
+      this->weights_quantized_.resize(1);
+      const vector<int>::const_iterator& shape_start =
         bottom[0]->shape().begin() + axis_;
-    const vector<int>::const_iterator& shape_end =
+      const vector<int>::const_iterator& shape_end =
         (num_axes == -1) ? bottom[0]->shape().end() : (shape_start + num_axes);
-    vector<int> scale_shape(shape_start, shape_end);
-    this->weights_quantized_[0].reset(new Blob<Dtype>(scale_shape));
+      vector<int> scale_shape(shape_start, shape_end);
+      this->weights_quantized_[0].reset(new Blob<Dtype>(scale_shape));
+    }
     if (param.bias_term()) {
       if (this->blobs_.size() + bottom.size() < 3) {
         // case: blobs.size == 1 && bottom.size == 1
@@ -169,14 +173,14 @@ void ScaleLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void ScaleLayer<Dtype>::Forward_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  // Trim layer input
   if (this->is_quantized_) {
-    // Trim layer input
     if (this->phase_ == TEST) {
-        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
-            bottom[0]->count());
+      for (int i = 0; i < bottom.size(); ++i) {
+        this->QuantizeLayerInputs_cpu(bottom[i]->mutable_cpu_data(), bottom[i]->count());
+      }
     }
 
-    // Trim weights
     caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
       this->weights_quantized_[0]->mutable_cpu_data());
 
@@ -194,6 +198,8 @@ void ScaleLayer<Dtype>::Forward_cpu(
     caffe_copy(bottom[0]->count(), bottom[0]->cpu_data(),
                temp_.mutable_cpu_data());
   }
+
+  // Trim scale
   const Dtype* scale_data = NULL;
   if (bottom.size() > 1) {
     scale_data = bottom[1]->cpu_data();
@@ -204,6 +210,7 @@ void ScaleLayer<Dtype>::Forward_cpu(
       scale_data = this->blobs_[0].get()->cpu_data();
     }
   }
+
   Dtype* top_data = top[0]->mutable_cpu_data();
   for (int n = 0; n < outer_dim_; ++n) {
     for (int d = 0; d < scale_dim_; ++d) {
@@ -217,10 +224,10 @@ void ScaleLayer<Dtype>::Forward_cpu(
     bias_layer_->Forward(bias_bottom_vec_, top);
   }
 
+  // Trim layer output
   if (this->is_quantized_) {
-    // Trim layer output
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+      this->QuantizeLayerOutputs_cpu(top[0]->mutable_cpu_data(), top[0]->count());
     }
   }
 }
@@ -233,6 +240,8 @@ void ScaleLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     bias_layer_->Backward(top, bias_propagate_down_, bias_bottom_vec_);
   }
   const bool scale_param = (bottom.size() == 1);
+
+  // Trim scale
   Blob<Dtype>* scale = NULL;
   if (scale_param) {
     if (this->is_quantized_) {

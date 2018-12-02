@@ -7,17 +7,19 @@ namespace caffe {
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  const Dtype* weight = NULL;
+  // Trim layer input
   if (this->is_quantized_) {
-    // Trim layer input
     if (this->phase_ == TEST) {
       for (int i = 0; i < bottom.size(); ++i) {
         this->QuantizeLayerInputs_gpu(bottom[i]->mutable_gpu_data(),
             bottom[i]->count());
       }
     }
+  }
 
-    // Trim weights
+  // Trim weights
+  const Dtype* weight = NULL;
+  if (this->is_quantized_) {
     caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->gpu_data(),
         this->weights_quantized_[0]->mutable_gpu_data());
     if (this->bias_term_) {
@@ -33,6 +35,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   } else {
     weight = this->blobs_[0]->gpu_data();
   }
+
   // Do forward propagation
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->gpu_data();
@@ -51,10 +54,10 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       }
     }
 
+    // Trim layer output
     if (this->is_quantized_) {
-      // Trim layer output
       if (this->phase_ == TEST) {
-        this->QuantizeLayerOutputs_gpu(top_data, top[i]->count());
+        this->QuantizeLayerOutputs_gpu(top[i]->mutable_cpu_data(), top[i]->count());
       }
     }
   }
@@ -63,12 +66,14 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+  // Trim weights
   const Dtype* weight = NULL;
   if (this->is_quantized_) {
     weight = this->weights_quantized_[0]->gpu_data();
   } else {
     weight = this->blobs_[0]->gpu_data();
   }
+
   Dtype* weight_diff = this->blobs_[0]->mutable_gpu_diff();
   for (int i = 0; i < top.size(); ++i) {
     const Dtype* top_diff = top[i]->gpu_diff();

@@ -29,14 +29,14 @@ __global__ void ScaleBiasForward(const int n, const Dtype* in,
 template <typename Dtype>
 void ScaleLayer<Dtype>::Forward_gpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  // Trim layer input
   if (this->is_quantized_) {
-    // Trim layer input
     if (this->phase_ == TEST) {
-        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_gpu_data(),
-            bottom[0]->count());
+      for (int i = 0; i < bottom.size(); ++i) {
+        this->QuantizeLayerInputs_cpu(bottom[i]->mutable_cpu_data(), bottom[i]->count());
+      }
     }
 
-    // Trim weights
     caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
       this->weights_quantized_[0]->mutable_gpu_data());
     if (bias_layer_) {
@@ -59,6 +59,8 @@ void ScaleLayer<Dtype>::Forward_gpu(
     caffe_copy(bottom[0]->count(), bottom[0]->gpu_data(),
                temp_.mutable_gpu_data());
   }
+
+  // Trim scale
   const Dtype* scale_data = NULL;
   if (bottom.size() > 1) {
     scale_data = bottom[1]->gpu_data();
@@ -69,14 +71,17 @@ void ScaleLayer<Dtype>::Forward_gpu(
       scale_data = this->blobs_[0].get()->gpu_data();
     }
   }
+
   Dtype* top_data = top[0]->mutable_gpu_data();
   if (bias_layer_) {
+    // Trim bias
     const Dtype* bias_data = NULL;
     if (this->is_quantized_) {
       bias_data = this->weights_quantized_[bias_param_id_]->gpu_data();
     } else {
       bias_data = this->blobs_[bias_param_id_]->gpu_data();
     }
+
     ScaleBiasForward<Dtype>  // NOLINT_NEXT_LINE(whitespace/operators)
         <<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
         count, bottom_data, scale_data, bias_data, scale_dim_, inner_dim_,
@@ -96,6 +101,8 @@ void ScaleLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     bias_layer_->Backward(top, bias_propagate_down_, bias_bottom_vec_);
   }
   const bool scale_param = (bottom.size() == 1);
+
+  // Trim scale
   Blob<Dtype>* scale = NULL;
   if (scale_param) {
     if (this->is_quantized_) {
@@ -106,6 +113,7 @@ void ScaleLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   } else {
     scale = bottom[1];
   }
+
   if ((!scale_param && propagate_down[1]) ||
       (scale_param && this->param_propagate_down_[0])) {
     const Dtype* top_diff = top[0]->gpu_diff();
