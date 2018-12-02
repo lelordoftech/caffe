@@ -9,24 +9,56 @@ namespace caffe {
 template <typename Dtype>
 void BatchNormLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  if (this->is_quantized_) {
+    // Trim layer input
+    if (this->phase_ == TEST) {
+        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
+            bottom[0]->count());
+    }
+
+    // Trim weights
+    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
+      this->weights_quantized_[0]->mutable_cpu_data());
+    caffe_copy(this->blobs_[1]->count(), this->blobs_[1]->cpu_data(),
+      this->weights_quantized_[1]->mutable_cpu_data());
+    caffe_copy(this->blobs_[2]->count(), this->blobs_[2]->cpu_data(),
+      this->weights_quantized_[2]->mutable_cpu_data());
+
+    int rounding = this->phase_ == TEST ? this->rounding_ :
+        QuantizationParameter_Rounding_STOCHASTIC;
+    this->QuantizeWeights_cpu(this->weights_quantized_, rounding, true);
+  }
+
   const Dtype* bottom_data = bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
   int num = bottom[0]->shape(0);
-  int spatial_dim = bottom[0]->count()/(channels_*bottom[0]->shape(0));
+  int spatial_dim = bottom[0]->count()/(bottom[0]->shape(0)*channels_);
 
   if (bottom[0] != top[0]) {
     caffe_copy(bottom[0]->count(), bottom_data, top_data);
   }
 
+  const Dtype* weight = NULL;
+  const Dtype* bias = NULL;
+  const Dtype* scale = NULL;
+  if (this->is_quantized_) {
+    weight = this->weights_quantized_[0]->gpu_data();
+    bias = this->weights_quantized_[1]->gpu_data();
+    scale = this->weights_quantized_[2]->cpu_data();
+  } else {
+    weight = this->blobs_[0]->gpu_data();
+    bias = this->blobs_[1]->gpu_data();
+    scale = this->blobs_[2]->cpu_data();
+  }
 
   if (use_global_stats_) {
     // use the stored mean/variance estimates.
-    const Dtype scale_factor = this->blobs_[2]->cpu_data()[0] == 0 ?
-        0 : 1 / this->blobs_[2]->cpu_data()[0];
+    const Dtype scale_factor = scale[0] == 0 ?
+        0 : 1 / scale[0];
     caffe_gpu_scale(variance_.count(), scale_factor,
-        this->blobs_[0]->gpu_data(), mean_.mutable_gpu_data());
+        weight, mean_.mutable_gpu_data());
     caffe_gpu_scale(variance_.count(), scale_factor,
-        this->blobs_[1]->gpu_data(), variance_.mutable_gpu_data());
+        bias, variance_.mutable_gpu_data());
   } else {
     // compute mean
     caffe_gpu_gemv<Dtype>(CblasNoTrans, channels_ * num, spatial_dim,
@@ -87,6 +119,13 @@ void BatchNormLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   //                 might clobber the data.  Can we skip this if they won't?
   caffe_copy(x_norm_.count(), top_data,
       x_norm_.mutable_gpu_data());
+
+  if (this->is_quantized_) {
+    // Trim layer output
+    if (this->phase_ == TEST) {
+      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+    }
+  }
 }
 
 template <typename Dtype>

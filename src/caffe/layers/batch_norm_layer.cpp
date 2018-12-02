@@ -7,6 +7,39 @@
 namespace caffe {
 
 template <typename Dtype>
+BatchNormLayer<Dtype>::BatchNormLayer(const LayerParameter& param)
+      : Layer<Dtype>(param), BaseRistrettoLayer<Dtype>() {
+  this->is_quantized_ = this->layer_param_.quantization_param().is_quantized();
+  this->precision_ = this->layer_param_.quantization_param().precision();
+  this->rounding_ = this->layer_param_.quantization_param().rounding_scheme();
+  switch (this->precision_) {
+  case QuantizationParameter_Precision_DYNAMIC_FIXED_POINT:
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->bw_params_ = this->layer_param_.quantization_param().bw_params();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    this->fl_params_ = this->layer_param_.quantization_param().fl_params();
+    break;
+  case QuantizationParameter_Precision_MINIFLOAT:
+    this->fp_mant_ = this->layer_param_.quantization_param().mant_bits();
+    this->fp_exp_ = this->layer_param_.quantization_param().exp_bits();
+    break;
+  case QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS:
+    this->pow_2_min_exp_ = this->layer_param_.quantization_param().exp_min();
+    this->pow_2_max_exp_ = this->layer_param_.quantization_param().exp_max();
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    break;
+  default:
+    LOG(FATAL) << "Unknown precision mode: " << this->precision_;
+    break;
+  }
+}
+
+template <typename Dtype>
 void BatchNormLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   BatchNormParameter param = this->layer_param_.batch_norm_param();
@@ -44,6 +77,21 @@ void BatchNormLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       CHECK_EQ(this->layer_param_.param(i).lr_mult(), 0.f)
           << "Cannot configure batch normalization statistics as layer "
           << "parameters.";
+    }
+  }
+
+  if (this->is_quantized_) {
+    // Prepare quantized weights
+    this->weights_quantized_.resize(3);
+    vector<int> weight_shape;
+    weight_shape.push_back(channels_);
+    this->weights_quantized_[0].reset(new Blob<Dtype>(weight_shape));
+    this->weights_quantized_[1].reset(new Blob<Dtype>(weight_shape));
+    weight_shape[0] = 1;
+    this->weights_quantized_[2].reset(new Blob<Dtype>(weight_shape));
+    for (int i = 0; i < 3; ++i) {
+      caffe_set(this->weights_quantized_[i]->count(), Dtype(0),
+                this->weights_quantized_[i]->mutable_cpu_data());
     }
   }
 }
@@ -86,6 +134,39 @@ void BatchNormLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  if (this->is_quantized_) {
+    // Trim layer input
+    if (this->phase_ == TEST) {
+        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
+            bottom[0]->count());
+    }
+
+    // Trim weights
+    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
+      this->weights_quantized_[0]->mutable_cpu_data());
+    caffe_copy(this->blobs_[1]->count(), this->blobs_[1]->cpu_data(),
+      this->weights_quantized_[1]->mutable_cpu_data());
+    caffe_copy(this->blobs_[2]->count(), this->blobs_[2]->cpu_data(),
+      this->weights_quantized_[2]->mutable_cpu_data());
+
+    int rounding = this->phase_ == TEST ? this->rounding_ :
+        QuantizationParameter_Rounding_STOCHASTIC;
+    this->QuantizeWeights_cpu(this->weights_quantized_, rounding, true);
+  }
+
+  const Dtype* weight = NULL;
+  const Dtype* bias = NULL;
+  const Dtype* scale = NULL;
+  if (this->is_quantized_) {
+    weight = this->weights_quantized_[0]->cpu_data();
+    bias = this->weights_quantized_[1]->cpu_data();
+    scale = this->weights_quantized_[2]->cpu_data();
+  } else {
+    weight = this->blobs_[0]->cpu_data();
+    bias = this->blobs_[1]->cpu_data();
+    scale = this->blobs_[2]->cpu_data();
+  }
+
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   int num = bottom[0]->shape(0);
@@ -97,12 +178,12 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
   if (use_global_stats_) {
     // use the stored mean/variance estimates.
-    const Dtype scale_factor = this->blobs_[2]->cpu_data()[0] == 0 ?
-        0 : 1 / this->blobs_[2]->cpu_data()[0];
+    const Dtype scale_factor = scale[0] == 0 ?
+        0 : 1 / scale[0];
     caffe_cpu_scale(variance_.count(), scale_factor,
-        this->blobs_[0]->cpu_data(), mean_.mutable_cpu_data());
+        weight, mean_.mutable_cpu_data());
     caffe_cpu_scale(variance_.count(), scale_factor,
-        this->blobs_[1]->cpu_data(), variance_.mutable_cpu_data());
+        bias, variance_.mutable_cpu_data());
   } else {
     // compute mean
     caffe_cpu_gemv<Dtype>(CblasNoTrans, channels_ * num, spatial_dim,
@@ -163,6 +244,13 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   //                 might clobber the data.  Can we skip this if they won't?
   caffe_copy(x_norm_.count(), top_data,
       x_norm_.mutable_cpu_data());
+
+  if (this->is_quantized_) {
+    // Trim layer output
+    if (this->phase_ == TEST) {
+      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+    }
+  }
 }
 
 template <typename Dtype>
