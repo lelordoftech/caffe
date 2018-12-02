@@ -16,7 +16,8 @@ using caffe::Net;
 class Quantization {
 public:
   explicit Quantization(string model, string weights, string model_quantized,
-      int iterations, string trimming_mode, double error_margin, string gpus);
+      int iterations, string trimming_mode, double error_margin, string gpus,
+      bool quant_all, int static_bitwidth);
   void QuantizeNet();
 private:
   void CheckWritePermissions(const string path);
@@ -33,6 +34,13 @@ private:
    */
   void RunForwardBatches(const int iterations, Net<float>* caffe_net,
       float* accuracy, const bool do_stats = false, const int score_number = 0);
+
+  // For quantization all layers
+  void DoQuantization();
+  void EditNetDescriptionDFP(caffe::NetParameter* param, const int bw);
+  void EditNetDescriptionPow2(caffe::NetParameter* param, const int bw);
+  int GetLayerIdx(const string layer_name);
+
   /**
    * @brief Quantize convolutional and fully connected layers to dynamic fixed
    * point.
@@ -101,6 +109,9 @@ private:
   double error_margin_;
   string gpus_;
   float test_score_baseline_;
+  bool quant_all_;
+  int static_bitwidth_;
+
   // The maximal absolute values of layer inputs, parameters and
   // layer outputs.
   vector<float> max_in_, max_params_, max_out_;
