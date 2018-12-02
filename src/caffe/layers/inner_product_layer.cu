@@ -9,24 +9,67 @@ namespace caffe {
 template <typename Dtype>
 void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  if (this->is_quantized_) {
+    // Trim layer input
+    if (this->phase_ == TEST) {
+        this->QuantizeLayerInputs_gpu(bottom[0]->mutable_gpu_data(),
+            bottom[0]->count());
+    }
+    // Trim weights
+    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->gpu_data(),
+        this->weights_quantized_[0]->mutable_gpu_data());
+    if (this->bias_term_) {
+      caffe_copy(this->blobs_[1]->count(), this->blobs_[1]->gpu_data(),
+          this->weights_quantized_[1]->mutable_gpu_data());
+    }
+    int rounding = this->phase_ == TEST ? this->rounding_ :
+        QuantizationParameter_Rounding_STOCHASTIC;
+    this->QuantizeWeights_gpu(this->weights_quantized_, rounding,
+        this->bias_term_);
+  }
+  // Do forward propagation
   const Dtype* bottom_data = bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
-  const Dtype* weight = this->blobs_[0]->gpu_data();
+  const Dtype* weight = NULL;
+  if (this->is_quantized_) {
+    weight = this->weights_quantized_[0]->cpu_data();
+  } else {
+    weight = this->blobs_[0]->cpu_data();
+  }
   if (M_ == 1) {
     caffe_gpu_gemv<Dtype>(CblasNoTrans, N_, K_, (Dtype)1.,
                          weight, bottom_data, (Dtype)0., top_data);
     if (bias_term_)
+      const Dtype* bias = NULL;
+      if (this->is_quantized_) {
+        bias = this->weights_quantized_[1]->cpu_data();
+      } else {
+        bias = this->blobs_[1]->cpu_data();
+      }
       caffe_gpu_axpy<Dtype>(N_, bias_multiplier_.cpu_data()[0],
-                            this->blobs_[1]->gpu_data(), top_data);
+                            bias, top_data);
   } else {
     caffe_gpu_gemm<Dtype>(CblasNoTrans,
                           transpose_ ? CblasNoTrans : CblasTrans,
                           M_, N_, K_, (Dtype)1.,
                           bottom_data, weight, (Dtype)0., top_data);
     if (bias_term_)
+      const Dtype* bias = NULL;
+      if (this->is_quantized_) {
+        bias = this->weights_quantized_[1]->cpu_data();
+      } else {
+        bias = this->blobs_[1]->cpu_data();
+      }
       caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, M_, N_, 1, (Dtype)1.,
                             bias_multiplier_.gpu_data(),
-                            this->blobs_[1]->gpu_data(), (Dtype)1., top_data);
+                            bias, (Dtype)1., top_data);
+  }
+
+  if (this->is_quantized_) {
+    // Trim layer output
+    if (this->phase_ == TEST) {
+      this->QuantizeLayerOutputs_gpu(top_data, top[0]->count());
+    }
   }
 }
 
@@ -60,15 +103,21 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   if (propagate_down[0]) {
     const Dtype* top_diff = top[0]->gpu_diff();
     // Gradient with respect to bottom data
+    const Dtype* weight = NULL;
+    if (this->is_quantized_) {
+      weight = this->weights_quantized_[0]->cpu_data();
+    } else {
+      weight = this->blobs_[0]->cpu_data();
+    }
     if (transpose_) {
       caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans,
           M_, K_, N_,
-          (Dtype)1., top_diff, this->blobs_[0]->gpu_data(),
+          (Dtype)1., top_diff, weight,
           (Dtype)0., bottom[0]->mutable_gpu_diff());
     } else {
       caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans,
           M_, K_, N_,
-         (Dtype)1., top_diff, this->blobs_[0]->gpu_data(),
+         (Dtype)1., top_diff, weight,
          (Dtype)0., bottom[0]->mutable_gpu_diff());
     }
   }

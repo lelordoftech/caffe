@@ -6,6 +6,7 @@
 #include "caffe/blob.hpp"
 #include "caffe/layer.hpp"
 #include "caffe/proto/caffe.pb.h"
+#include "ristretto/base_ristretto_layer.hpp"
 
 namespace caffe {
 
@@ -16,10 +17,10 @@ namespace caffe {
  * TODO(dox): thorough documentation for Forward, Backward, and proto params.
  */
 template <typename Dtype>
-class InnerProductLayer : public Layer<Dtype> {
+class InnerProductLayer : public Layer<Dtype>,
+  public BaseRistrettoLayer<Dtype> {
  public:
-  explicit InnerProductLayer(const LayerParameter& param)
-      : Layer<Dtype>(param) {}
+  explicit InnerProductLayer(const LayerParameter& param);
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
