@@ -228,8 +228,16 @@ class Net {
       const string& layer_name);
   /**
    * @brief Look at the layer activations and parameters to find the maximum
-   * absolute values. The following layers are considered: Convolution,
-   * InnerProduct.
+   * absolute values. The following layers are considered:
+   * Convolution
+   * InnerProduct
+   * Deconvolution
+   * BatchNorm
+   * Scale
+   * Pooling
+   * ReLU
+   * Concat
+   * Eltwise
    *
    * @param layer_name The layers that should be quantized to fixed point.
    * @param max_in The highest layer input.
