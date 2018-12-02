@@ -9,6 +9,39 @@
 namespace caffe {
 
 template <typename Dtype>
+ScaleLayer<Dtype>::ScaleLayer(const LayerParameter& param)
+      : Layer<Dtype>(param), BaseRistrettoLayer<Dtype>() {
+  this->is_quantized_ = this->layer_param_.quantization_param().is_quantized();
+  this->precision_ = this->layer_param_.quantization_param().precision();
+  this->rounding_ = this->layer_param_.quantization_param().rounding_scheme();
+  switch (this->precision_) {
+  case QuantizationParameter_Precision_DYNAMIC_FIXED_POINT:
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->bw_params_ = this->layer_param_.quantization_param().bw_params();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    this->fl_params_ = this->layer_param_.quantization_param().fl_params();
+    break;
+  case QuantizationParameter_Precision_MINIFLOAT:
+    this->fp_mant_ = this->layer_param_.quantization_param().mant_bits();
+    this->fp_exp_ = this->layer_param_.quantization_param().exp_bits();
+    break;
+  case QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS:
+    this->pow_2_min_exp_ = this->layer_param_.quantization_param().exp_min();
+    this->pow_2_max_exp_ = this->layer_param_.quantization_param().exp_max();
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    break;
+  default:
+    LOG(FATAL) << "Unknown precision mode: " << this->precision_;
+    break;
+  }
+}
+
+template <typename Dtype>
 void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   const ScaleParameter& param = this->layer_param_.scale_param();
@@ -70,6 +103,26 @@ void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     bias_propagate_down_.resize(1, false);
   }
   this->param_propagate_down_.resize(this->blobs_.size(), true);
+
+  if (this->is_quantized_) {
+    // Prepare quantized weights
+    const int num_axes = param.num_axes();
+    this->weights_quantized_.resize(1);
+    const vector<int>::const_iterator& shape_start =
+        bottom[0]->shape().begin() + axis_;
+    const vector<int>::const_iterator& shape_end =
+        (num_axes == -1) ? bottom[0]->shape().end() : (shape_start + num_axes);
+    vector<int> scale_shape(shape_start, shape_end);
+    this->weights_quantized_[0].reset(new Blob<Dtype>(scale_shape));
+    if (param.bias_term()) {
+      if (this->blobs_.size() + bottom.size() < 3) {
+        // case: blobs.size == 1 && bottom.size == 1
+        // or blobs.size == 0 && bottom.size == 2
+        this->weights_quantized_.resize(bias_param_id_ + 1);
+        this->weights_quantized_[bias_param_id_] = bias_layer_->blobs()[0];
+      }
+    }
+  }
 }
 
 template <typename Dtype>
@@ -116,6 +169,22 @@ void ScaleLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void ScaleLayer<Dtype>::Forward_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  if (this->is_quantized_) {
+    // Trim layer input
+    if (this->phase_ == TEST) {
+        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
+            bottom[0]->count());
+    }
+
+    // Trim weights
+    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
+      this->weights_quantized_[0]->mutable_cpu_data());
+
+    int rounding = this->phase_ == TEST ? this->rounding_ :
+        QuantizationParameter_Rounding_STOCHASTIC;
+    this->QuantizeWeights_cpu(this->weights_quantized_, rounding, true);
+  }
+
   const Dtype* bottom_data = bottom[0]->cpu_data();
   if (bottom[0] == top[0]) {
     // In-place computation; need to store bottom data before overwriting it.
@@ -125,8 +194,16 @@ void ScaleLayer<Dtype>::Forward_cpu(
     caffe_copy(bottom[0]->count(), bottom[0]->cpu_data(),
                temp_.mutable_cpu_data());
   }
-  const Dtype* scale_data =
-      ((bottom.size() > 1) ? bottom[1] : this->blobs_[0].get())->cpu_data();
+  const Dtype* scale_data = NULL;
+  if (bottom.size() > 1) {
+    scale_data = bottom[1]->cpu_data();
+  } else {
+    if (this->is_quantized_) {
+      scale_data = this->weights_quantized_[0].get()->cpu_data();
+    } else {
+      scale_data = this->blobs_[0].get()->cpu_data();
+    }
+  }
   Dtype* top_data = top[0]->mutable_cpu_data();
   for (int n = 0; n < outer_dim_; ++n) {
     for (int d = 0; d < scale_dim_; ++d) {
@@ -139,6 +216,13 @@ void ScaleLayer<Dtype>::Forward_cpu(
   if (bias_layer_) {
     bias_layer_->Forward(bias_bottom_vec_, top);
   }
+
+  if (this->is_quantized_) {
+    // Trim layer output
+    if (this->phase_ == TEST) {
+      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+    }
+  }
 }
 
 template <typename Dtype>
@@ -149,7 +233,17 @@ void ScaleLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     bias_layer_->Backward(top, bias_propagate_down_, bias_bottom_vec_);
   }
   const bool scale_param = (bottom.size() == 1);
-  Blob<Dtype>* scale = scale_param ? this->blobs_[0].get() : bottom[1];
+  Blob<Dtype>* scale = NULL;
+  if (scale_param) {
+    if (this->is_quantized_) {
+      scale = this->weights_quantized_[0].get();
+    } else {
+      scale = this->blobs_[0].get();
+    }
+  } else {
+    scale = bottom[1];
+  }
+  
   if ((!scale_param && propagate_down[1]) ||
       (scale_param && this->param_propagate_down_[0])) {
     const Dtype* top_diff = top[0]->cpu_diff();

@@ -8,6 +8,7 @@
 #include "caffe/proto/caffe.pb.h"
 
 #include "caffe/layers/bias_layer.hpp"
+#include "ristretto/base_ristretto_layer.hpp"
 
 namespace caffe {
 
@@ -23,10 +24,10 @@ namespace caffe {
  * parameter of the layer (as is the bias, if it is included).
  */
 template <typename Dtype>
-class ScaleLayer: public Layer<Dtype> {
+class ScaleLayer: public Layer<Dtype>,
+  public BaseRistrettoLayer<Dtype> {
  public:
-  explicit ScaleLayer(const LayerParameter& param)
-      : Layer<Dtype>(param) {}
+  explicit ScaleLayer(const LayerParameter& param);
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
