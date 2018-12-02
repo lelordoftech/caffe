@@ -541,7 +541,6 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       // quantize parameters
       if (net_part.find("Parameters") != string::npos) {
         LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("ConvolutionRistretto");
         param_layer->mutable_quantization_param()->set_fl_params(bw_conv -
             GetIntegerLengthParams(param->layer(i).name()));
         param_layer->mutable_quantization_param()->set_bw_params(bw_conv);
@@ -549,7 +548,6 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       // quantize activations
       if (net_part.find("Activations") != string::npos) {
         LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("ConvolutionRistretto");
         param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
             GetIntegerLengthIn(param->layer(i).name()));
         param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
@@ -560,12 +558,10 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
     }
     // if this is an inner product layer which should be quantized ...
     if (layers_2_quantize.find("InnerProduct") != string::npos &&
-        (param->layer(i).type().find("InnerProduct") != string::npos ||
-        param->layer(i).type().find("FcRistretto") != string::npos)) {
+        param->layer(i).type().find("InnerProduct") != string::npos) {
       // quantize parameters
       if (net_part.find("Parameters") != string::npos) {
         LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("FcRistretto");
         param_layer->mutable_quantization_param()->set_fl_params(bw_fc -
             GetIntegerLengthParams(param->layer(i).name()));
         param_layer->mutable_quantization_param()->set_bw_params(bw_fc);
@@ -573,7 +569,6 @@ void Quantization::EditNetDescriptionDynamicFixedPoint(NetParameter* param,
       // quantize activations
       if (net_part.find("Activations") != string::npos) {
         LayerParameter* param_layer = param->mutable_layer(i);
-        param_layer->set_type("FcRistretto");
         param_layer->mutable_quantization_param()->set_fl_layer_in(bw_in -
             GetIntegerLengthIn(param->layer(i).name()) );
         param_layer->mutable_quantization_param()->set_bw_layer_in(bw_in);
@@ -590,18 +585,14 @@ void Quantization::EditNetDescriptionMiniFloat(NetParameter* param,
   caffe::QuantizationParameter_Precision precision =
         caffe::QuantizationParameter_Precision_MINIFLOAT;
   for (int i = 0; i < param->layer_size(); ++i) {
-    if ( param->layer(i).type() == "Convolution" ||
-          param->layer(i).type() == "ConvolutionRistretto") {
+    if ( param->layer(i).type() == "Convolution") {
       LayerParameter* param_layer = param->mutable_layer(i);
-      param_layer->set_type("ConvolutionRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
       param_layer->mutable_quantization_param()->set_mant_bits(bitwidth
           - exp_bits_ - 1);
       param_layer->mutable_quantization_param()->set_exp_bits(exp_bits_);
-    } else if ( param->layer(i).type() == "InnerProduct" ||
-          param->layer(i).type() == "FcRistretto") {
+    } else if ( param->layer(i).type() == "InnerProduct") {
       LayerParameter* param_layer = param->mutable_layer(i);
-      param_layer->set_type("FcRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
       param_layer->mutable_quantization_param()->set_mant_bits(bitwidth
           - exp_bits_ - 1);
@@ -615,19 +606,15 @@ void Quantization::EditNetDescriptionIntegerPowerOf2Weights(
   caffe::QuantizationParameter_Precision precision =
       caffe::QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS;
   for (int i = 0; i < param->layer_size(); ++i) {
-    if ( param->layer(i).type() == "Convolution" ||
-          param->layer(i).type() == "ConvolutionRistretto") {
+    if ( param->layer(i).type() == "Convolution") {
       LayerParameter* param_layer = param->mutable_layer(i);
-      param_layer->set_type("ConvolutionRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
       // Weights are represented as 2^e where e in [-8,...,-1].
       // This choice of exponents works well for AlexNet.
       param_layer->mutable_quantization_param()->set_exp_min(-8);
       param_layer->mutable_quantization_param()->set_exp_max(-1);
-    } else if ( param->layer(i).type() == "InnerProduct" ||
-          param->layer(i).type() == "FcRistretto") {
+    } else if ( param->layer(i).type() == "InnerProduct") {
       LayerParameter* param_layer = param->mutable_layer(i);
-      param_layer->set_type("FcRistretto");
       param_layer->mutable_quantization_param()->set_precision(precision);
       // Weights are represented as 2^e where e in [-8,...,-1].
       // This choice of exponents works well for AlexNet.
