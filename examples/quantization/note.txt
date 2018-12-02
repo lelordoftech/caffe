@@ -1,0 +1,6 @@
+
+Model name         | Model size (bytes) | Accuracy |
+-------------------|--------------------|----------|
+Original model     | 1,725,113          | 0.9861   |
+Compressed model   |   323,023          |          |
+Decompressed model | 1,725,274          | 0.9797   |
