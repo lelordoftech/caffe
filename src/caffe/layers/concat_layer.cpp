@@ -6,6 +6,39 @@
 namespace caffe {
 
 template <typename Dtype>
+ConcatLayer<Dtype>::ConcatLayer(const LayerParameter& param)
+      : Layer<Dtype>(param), BaseRistrettoLayer<Dtype>() {
+  this->is_quantized_ = this->layer_param_.quantization_param().is_quantized();
+  this->precision_ = this->layer_param_.quantization_param().precision();
+  this->rounding_ = this->layer_param_.quantization_param().rounding_scheme();
+  switch (this->precision_) {
+  case QuantizationParameter_Precision_DYNAMIC_FIXED_POINT:
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    //this->bw_params_ = this->layer_param_.quantization_param().bw_params();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    //this->fl_params_ = this->layer_param_.quantization_param().fl_params();
+    break;
+  case QuantizationParameter_Precision_MINIFLOAT:
+    this->fp_mant_ = this->layer_param_.quantization_param().mant_bits();
+    this->fp_exp_ = this->layer_param_.quantization_param().exp_bits();
+    break;
+  case QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS:
+    //this->pow_2_min_exp_ = this->layer_param_.quantization_param().exp_min();
+    //this->pow_2_max_exp_ = this->layer_param_.quantization_param().exp_max();
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    break;
+  default:
+    LOG(FATAL) << "Unknown precision mode: " << this->precision_;
+    break;
+  }
+}
+
+template <typename Dtype>
 void ConcatLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   const ConcatParameter& concat_param = this->layer_param_.concat_param();
@@ -57,6 +90,14 @@ template <typename Dtype>
 void ConcatLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   if (bottom.size() == 1) { return; }
+  if (this->is_quantized_) {
+    // Trim layer input
+    if (this->phase_ == TEST) {
+        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
+            bottom[0]->count());
+    }
+  }
+
   Dtype* top_data = top[0]->mutable_cpu_data();
   int offset_concat_axis = 0;
   const int top_concat_axis = top[0]->shape(concat_axis_);
@@ -70,6 +111,13 @@ void ConcatLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
               * concat_input_size_);
     }
     offset_concat_axis += bottom_concat_axis;
+  }
+
+  if (this->is_quantized_) {
+    // Trim layer output
+    if (this->phase_ == TEST) {
+      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+    }
   }
 }
 
