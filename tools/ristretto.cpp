@@ -38,6 +38,13 @@ DEFINE_int32(iterations, 50,
     "Optional: The number of iterations to run.");
 DEFINE_double(error_margin, 2,
     "Optional: the allowed accuracy drop in %");
+DEFINE_bool(quant_all, false,
+    "Optional: quantization all layers"
+    "\tOnly support for:"
+    "\t\tdynamic_fixed_point"
+    "\t\tinteger_power_of_2_weights");
+DEFINE_int32(static_bitwidth, 8,
+    "Optional: static bit width for all layers");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -84,7 +91,7 @@ int quantize(){
   CHECK_GT(FLAGS_trimming_mode.size(), 0) << "Need trimming mode.";
   Quantization* q = new Quantization(FLAGS_model, FLAGS_weights,
       FLAGS_model_quantized, FLAGS_iterations, FLAGS_trimming_mode,
-      FLAGS_error_margin, FLAGS_gpu);
+      FLAGS_error_margin, FLAGS_gpu, FLAGS_quant_all, FLAGS_static_bitwidth);
   q->QuantizeNet();
   delete q;
   return 0;
