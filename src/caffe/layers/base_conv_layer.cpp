@@ -8,6 +8,40 @@
 
 namespace caffe {
 
+
+template <typename Dtype>
+BaseConvolutionLayer<Dtype>::BaseConvolutionLayer(const LayerParameter& param)
+  : Layer<Dtype>(param), BaseRistrettoLayer<Dtype>() {
+  this->is_quantized_ = this->layer_param_.quantization_param().is_quantized();
+  this->precision_ = this->layer_param_.quantization_param().precision();
+  this->rounding_ = this->layer_param_.quantization_param().rounding_scheme();
+  switch (this->precision_) {
+  case QuantizationParameter_Precision_DYNAMIC_FIXED_POINT:
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->bw_params_ = this->layer_param_.quantization_param().bw_params();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    this->fl_params_ = this->layer_param_.quantization_param().fl_params();
+    break;
+  case QuantizationParameter_Precision_MINIFLOAT:
+    this->fp_mant_ = this->layer_param_.quantization_param().mant_bits();
+    this->fp_exp_ = this->layer_param_.quantization_param().exp_bits();
+    break;
+  case QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS:
+    this->pow_2_min_exp_ = this->layer_param_.quantization_param().exp_min();
+    this->pow_2_max_exp_ = this->layer_param_.quantization_param().exp_max();
+    this->bw_layer_in_ = this->layer_param_.quantization_param().bw_layer_in();
+    this->bw_layer_out_ = this->layer_param_.quantization_param().bw_layer_out();
+    this->fl_layer_in_ = this->layer_param_.quantization_param().fl_layer_in();
+    this->fl_layer_out_ = this->layer_param_.quantization_param().fl_layer_out();
+    break;
+  default:
+    LOG(FATAL) << "Unknown precision mode: " << this->precision_;
+    break;
+  }
+}
+
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -179,6 +213,15 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   weight_offset_ = conv_out_channels_ * kernel_dim_ / group_;
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
+
+  if (this->is_quantized_) {
+    // Prepare quantized weights
+    this->weights_quantized_.resize(2);
+    this->weights_quantized_[0].reset(new Blob<Dtype>(weight_shape));
+    if (this->bias_term_) {
+        this->weights_quantized_[1].reset(new Blob<Dtype>(bias_shape));
+    }
+  }
 }
 
 template <typename Dtype>

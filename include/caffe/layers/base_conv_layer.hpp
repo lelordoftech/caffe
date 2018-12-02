@@ -7,6 +7,7 @@
 #include "caffe/layer.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/util/im2col.hpp"
+#include "ristretto/base_ristretto_layer.hpp"
 
 namespace caffe {
 
@@ -15,10 +16,10 @@ namespace caffe {
  *        ConvolutionLayer and DeconvolutionLayer.
  */
 template <typename Dtype>
-class BaseConvolutionLayer : public Layer<Dtype> {
+class BaseConvolutionLayer : public Layer<Dtype>,
+  public BaseRistrettoLayer<Dtype> {
  public:
-  explicit BaseConvolutionLayer(const LayerParameter& param)
-      : Layer<Dtype>(param) {}
+  explicit BaseConvolutionLayer(const LayerParameter& param);
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
