@@ -16,6 +16,14 @@ __global__ void ReLUForward(const int n, const Dtype* in, Dtype* out,
 template <typename Dtype>
 void ReLULayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  if (this->is_quantized_) {
+    // Trim layer input
+    if (this->phase_ == TEST) {
+        this->QuantizeLayerInputs_cpu(bottom[0]->mutable_cpu_data(),
+            bottom[0]->count());
+    }
+  }
+
   const Dtype* bottom_data = bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
   const int count = bottom[0]->count();
@@ -23,6 +31,14 @@ void ReLULayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   // NOLINT_NEXT_LINE(whitespace/operators)
   ReLUForward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
       count, bottom_data, top_data, negative_slope);
+
+  if (this->is_quantized_) {
+    // Trim layer output
+    if (this->phase_ == TEST) {
+      this->QuantizeLayerOutputs_cpu(top_data, top[0]->count());
+    }
+  }
+
   CUDA_POST_KERNEL_CHECK;
   // << " count: " << count << " bottom_data: "
   //     << (unsigned long)bottom_data

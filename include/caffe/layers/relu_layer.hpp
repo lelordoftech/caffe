@@ -8,6 +8,7 @@
 #include "caffe/proto/caffe.pb.h"
 
 #include "caffe/layers/neuron_layer.hpp"
+#include "ristretto/base_ristretto_layer.hpp"
 
 namespace caffe {
 
@@ -16,7 +17,8 @@ namespace caffe {
  *        The simple max is fast to compute, and the function does not saturate.
  */
 template <typename Dtype>
-class ReLULayer : public NeuronLayer<Dtype> {
+class ReLULayer : public NeuronLayer<Dtype>,
+  public BaseRistrettoLayer<Dtype> {
  public:
   /**
    * @param param provides ReLUParameter relu_param,
@@ -24,8 +26,7 @@ class ReLULayer : public NeuronLayer<Dtype> {
    *   - negative_slope (\b optional, default 0).
    *     the value @f$ \nu @f$ by which negative values are multiplied.
    */
-  explicit ReLULayer(const LayerParameter& param)
-      : NeuronLayer<Dtype>(param) {}
+  explicit ReLULayer(const LayerParameter& param);
 
   virtual inline const char* type() const { return "ReLU"; }
 
