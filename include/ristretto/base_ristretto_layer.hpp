@@ -2,13 +2,6 @@
 #define CAFFE_BASE_RISTRETTO_LAYER_HPP_
 
 #include "caffe/blob.hpp"
-#include "caffe/util/im2col.hpp"
-#include "caffe/layers/conv_layer.hpp"
-#include "caffe/layers/deconv_layer.hpp"
-#include "caffe/layers/inner_product_layer.hpp"
-#include "caffe/layers/base_data_layer.hpp"
-#include "caffe/layers/lrn_layer.hpp"
-#include "caffe/proto/caffe.pb.h"
 
 namespace caffe {
 
@@ -72,105 +65,9 @@ class BaseRistrettoLayer{
   int rounding_, precision_;
   // For parameter layers: reduced word with parameters.
   vector<shared_ptr<Blob<Dtype> > > weights_quantized_;
+
+  bool is_quantized_;
 };
-
-/**
- * @brief Convolutional layer with quantized layer parameters and activations.
- */
-template <typename Dtype>
-class ConvolutionRistrettoLayer : public ConvolutionLayer<Dtype>,
-      public BaseRistrettoLayer<Dtype> {
- public:
-  explicit ConvolutionRistrettoLayer(const LayerParameter& param);
-  virtual inline const char* type() const { return "ConvolutionRistretto"; }
-
- protected:
-  void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-};
-
-/**
- * @brief Deconvolutional layer with quantized layer parameters and activations.
- */
-template <typename Dtype>
-class DeconvolutionRistrettoLayer : public DeconvolutionLayer<Dtype>,
-      public BaseRistrettoLayer<Dtype> {
- public:
-  explicit DeconvolutionRistrettoLayer(const LayerParameter& param);
-
-  virtual inline const char* type() const { return "DeconvolutionRistretto"; }
-
- protected:
-  void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-};
-
-/**
- * @brief Inner product (fully connected) layer with quantized layer parameters
- * and activations.
- */
-template <typename Dtype>
-class FcRistrettoLayer : public InnerProductLayer<Dtype>,
-      public BaseRistrettoLayer<Dtype>{
- public:
-  explicit FcRistrettoLayer(const LayerParameter& param);
-  void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual inline const char* type() const { return "FcRistretto"; }
-  virtual inline int ExactNumBottomBlobs() const { return 1; }
-  virtual inline int ExactNumTopBlobs() const { return 1; }
-
- protected:
-  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-};
-
-/**
- * @brief Local response normalization (LRN) layer with minifloat layer inputs,
- * intermediate results and outputs.
- */
-template <typename Dtype>
-class LRNRistrettoLayer : public LRNLayer<Dtype>,
-      public BaseRistrettoLayer<Dtype>{
- public:
-  explicit LRNRistrettoLayer(const LayerParameter& param);
-  virtual inline const char* type() const { return "LRNRistretto"; }
-
- protected:
-  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-    const vector<Blob<Dtype>*>& top);
-  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  void Backward_gpu(const vector<Blob<Dtype>*>& top,
-    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  virtual void CrossChannelForward_gpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-};
-
 }  // namespace caffe
 
 #endif  // CAFFE_BASE_RISTRETTO_LAYER_HPP_
