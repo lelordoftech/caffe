@@ -1,3 +1,53 @@
+# Quantization Example
+
+## LeNet
+
+### 1. Get LeNet model
+
+```bash
+./data/mnist/get_mnist.sh
+```
+
+```bash
+./examples/mnist/create_mnist.sh
+```
+
+```bash
+./examples/mnist/train_lenet.sh
+```
+
+### 2. Quantization
+
+```bash
+./examples/quantization/00_quantize_LeNet.sh
+```
+
+```bash
+./examples/quantization/01_finetune_LeNet.sh
+```
+
+```python
+./examples/quantization/02_analyze_params.py
+```
+
+```bash
+./examples/quantization/03_benchmark_LeNet.sh
+```
+
+```bash
+./examples/quantization/04_benchmark_LeNet_ori.sh
+```
+
+### 3. Experiment Result
+
+No | Model name         | Model size (bytes) | Accuracy |
+---|--------------------|--------------------|----------|
+ 0 | Original model     | 1,725,113          | 0.9861   |
+ 1 | Compressed model   |   323,023          |          |
+ 2 | Decompressed model | 1,725,274          | 0.9797   |
+
+---
+
 # Caffe
 
 [![Build Status](https://travis-ci.org/BVLC/caffe.svg?branch=master)](https://travis-ci.org/BVLC/caffe)
@@ -17,7 +67,7 @@ and step-by-step examples.
 
 ## Custom distributions
 
- - [Intel Caffe](https://github.com/BVLC/caffe/tree/intel) (Optimized for CPU and support for multi-node), in particular Xeon processors (HSW, BDW, SKX, Xeon Phi).
+- [Intel Caffe](https://github.com/BVLC/caffe/tree/intel) (Optimized for CPU and support for multi-node), in particular Xeon processors (HSW, BDW, SKX, Xeon Phi).
 - [OpenCL Caffe](https://github.com/BVLC/caffe/tree/opencl) e.g. for AMD or Intel devices.
 - [Windows Caffe](https://github.com/BVLC/caffe/tree/windows)
 
