@@ -13,7 +13,7 @@ void BatchNormLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   if (this->is_quantized_) {
     if (this->phase_ == TEST) {
       for (int i = 0; i < bottom.size(); ++i) {
-        this->QuantizeLayerInputs_cpu(bottom[i]->mutable_cpu_data(), bottom[i]->count());
+        this->QuantizeLayerInputs_gpu(bottom[i]->mutable_gpu_data(), bottom[i]->count());
       }
     }
   }
@@ -23,23 +23,23 @@ void BatchNormLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype* bias = NULL;
   const Dtype* scale = NULL;
   if (this->is_quantized_) {
-    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
-      this->weights_quantized_[0]->mutable_cpu_data());
-    caffe_copy(this->blobs_[1]->count(), this->blobs_[1]->cpu_data(),
-      this->weights_quantized_[1]->mutable_cpu_data());
+    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->gpu_data(),
+      this->weights_quantized_[0]->mutable_gpu_data());
+    caffe_copy(this->blobs_[1]->count(), this->blobs_[1]->gpu_data(),
+      this->weights_quantized_[1]->mutable_gpu_data());
     caffe_copy(this->blobs_[2]->count(), this->blobs_[2]->cpu_data(),
       this->weights_quantized_[2]->mutable_cpu_data());
 
     int rounding = this->phase_ == TEST ? this->rounding_ :
         QuantizationParameter_Rounding_STOCHASTIC;
-    this->QuantizeWeights_cpu(this->weights_quantized_, rounding, true);
+    this->QuantizeWeights_gpu(this->weights_quantized_, rounding, true, true);
 
-    weight = this->weights_quantized_[0]->cpu_data();
-    bias = this->weights_quantized_[1]->cpu_data();
+    weight = this->weights_quantized_[0]->gpu_data();
+    bias = this->weights_quantized_[1]->gpu_data();
     scale = this->weights_quantized_[2]->cpu_data();
   } else {
-    weight = this->blobs_[0]->cpu_data();
-    bias = this->blobs_[1]->cpu_data();
+    weight = this->blobs_[0]->gpu_data();
+    bias = this->blobs_[1]->gpu_data();
     scale = this->blobs_[2]->cpu_data();
   }
 
@@ -124,7 +124,7 @@ void BatchNormLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   if (this->is_quantized_) {
     // Trim layer output
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top[0]->mutable_cpu_data(), top[0]->count());
+      this->QuantizeLayerOutputs_gpu(top[0]->mutable_gpu_data(), top[0]->count());
     }
   }
 }

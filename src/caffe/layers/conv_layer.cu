@@ -57,7 +57,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     // Trim layer output
     if (this->is_quantized_) {
       if (this->phase_ == TEST) {
-        this->QuantizeLayerOutputs_gpu(top[i]->mutable_cpu_data(), top[i]->count());
+        this->QuantizeLayerOutputs_gpu(top[i]->mutable_gpu_data(), top[i]->count());
       }
     }
   }

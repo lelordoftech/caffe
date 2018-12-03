@@ -16,7 +16,7 @@ BaseRistrettoLayer<Dtype>::BaseRistrettoLayer() {
 template <typename Dtype>
 void BaseRistrettoLayer<Dtype>::QuantizeWeights_cpu(
       vector<shared_ptr<Blob<Dtype> > > weights_quantized, const int rounding,
-      const bool bias_term) {
+      const bool bias_term, const bool scale) {
   Dtype* weight = weights_quantized[0]->mutable_cpu_data();
   const int cnt_weight = weights_quantized[0]->count();
   switch (precision_) {
@@ -26,10 +26,18 @@ void BaseRistrettoLayer<Dtype>::QuantizeWeights_cpu(
       Trim2MiniFloat_cpu(weights_quantized[1]->mutable_cpu_data(),
           weights_quantized[1]->count(), fp_mant_, fp_exp_, rounding);
     }
+    if (scale) {
+      Trim2MiniFloat_cpu(weights_quantized[1]->mutable_cpu_data(),
+          weights_quantized[1]->count(), fp_mant_, fp_exp_, rounding);
+    }
     break;
   case QuantizationParameter_Precision_DYNAMIC_FIXED_POINT:
     Trim2FixedPoint_cpu(weight, cnt_weight, bw_params_, rounding, fl_params_);
     if (bias_term) {
+      Trim2FixedPoint_cpu(weights_quantized[1]->mutable_cpu_data(),
+          weights_quantized[1]->count(), bw_params_, rounding, fl_params_);
+    }
+    if (scale) {
       Trim2FixedPoint_cpu(weights_quantized[1]->mutable_cpu_data(),
           weights_quantized[1]->count(), bw_params_, rounding, fl_params_);
     }
@@ -190,10 +198,10 @@ template BaseRistrettoLayer<double>::BaseRistrettoLayer();
 template BaseRistrettoLayer<float>::BaseRistrettoLayer();
 template void BaseRistrettoLayer<double>::QuantizeWeights_cpu(
     vector<shared_ptr<Blob<double> > > weights_quantized, const int rounding,
-    const bool bias_term);
+    const bool bias_term, const bool scale);
 template void BaseRistrettoLayer<float>::QuantizeWeights_cpu(
     vector<shared_ptr<Blob<float> > > weights_quantized, const int rounding,
-    const bool bias_term);
+    const bool bias_term, const bool scale);
 template void BaseRistrettoLayer<double>::QuantizeLayerInputs_cpu(double* data,
     const int count);
 template void BaseRistrettoLayer<float>::QuantizeLayerInputs_cpu(float* data,

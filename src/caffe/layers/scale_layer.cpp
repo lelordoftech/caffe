@@ -106,25 +106,19 @@ void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
   if (this->is_quantized_) {
     // Prepare quantized weights
-    if (bottom.size() == 1 && this->blobs_.size() > 0) {
-      LOG(INFO) << "Skipping parameter initialization";
-    } else if (bottom.size() == 1) {
-      const int num_axes = param.num_axes();
-      this->weights_quantized_.resize(1);
-      const vector<int>::const_iterator& shape_start =
-        bottom[0]->shape().begin() + axis_;
-      const vector<int>::const_iterator& shape_end =
-        (num_axes == -1) ? bottom[0]->shape().end() : (shape_start + num_axes);
-      vector<int> scale_shape(shape_start, shape_end);
-      this->weights_quantized_[0].reset(new Blob<Dtype>(scale_shape));
-    }
+    const int num_axes = param.num_axes();
+    this->weights_quantized_.resize(1);
+    const vector<int>::const_iterator& shape_start =
+      bottom[0]->shape().begin() + axis_;
+    const vector<int>::const_iterator& shape_end =
+      (num_axes == -1) ? bottom[0]->shape().end() : (shape_start + num_axes);
+    vector<int> scale_shape(shape_start, shape_end);
+    this->weights_quantized_[0].reset(new Blob<Dtype>(scale_shape));
     if (param.bias_term()) {
-      if (this->blobs_.size() + bottom.size() < 3) {
-        // case: blobs.size == 1 && bottom.size == 1
-        // or blobs.size == 0 && bottom.size == 2
-        this->weights_quantized_.resize(bias_param_id_ + 1);
-        this->weights_quantized_[bias_param_id_] = bias_layer_->blobs()[0];
-      }
+      // case: blobs.size == 1 && bottom.size == 1
+      // or blobs.size == 0 && bottom.size == 2
+      this->weights_quantized_.resize(bias_param_id_ + 1);
+      this->weights_quantized_[bias_param_id_] = bias_layer_->blobs()[0];
     }
   }
 }
@@ -240,19 +234,7 @@ void ScaleLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     bias_layer_->Backward(top, bias_propagate_down_, bias_bottom_vec_);
   }
   const bool scale_param = (bottom.size() == 1);
-
-  // Trim scale
-  Blob<Dtype>* scale = NULL;
-  if (scale_param) {
-    if (this->is_quantized_) {
-      scale = this->weights_quantized_[0].get();
-    } else {
-      scale = this->blobs_[0].get();
-    }
-  } else {
-    scale = bottom[1];
-  }
-  
+  Blob<Dtype>* scale = scale_param ? this->blobs_[0].get() : bottom[1];
   if ((!scale_param && propagate_down[1]) ||
       (scale_param && this->param_propagate_down_[0])) {
     const Dtype* top_diff = top[0]->cpu_diff();
@@ -307,7 +289,18 @@ void ScaleLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   }
   if (propagate_down[0]) {
     const Dtype* top_diff = top[0]->cpu_diff();
-    const Dtype* scale_data = scale->cpu_data();
+    // Trim scale
+    const Dtype* scale_data = NULL;
+    if (scale_param) {
+      if (this->is_quantized_) {
+        scale_data = this->weights_quantized_[0].get()->cpu_data();
+      } else {
+        scale_data = this->blobs_[0].get()->cpu_data();
+      }
+    } else {
+      scale_data = bottom[1]->cpu_data();
+    }
+
     Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
     for (int n = 0; n < outer_dim_; ++n) {
       for (int d = 0; d < scale_dim_; ++d) {

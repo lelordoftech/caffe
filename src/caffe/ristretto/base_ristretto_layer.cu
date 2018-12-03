@@ -6,7 +6,7 @@ namespace caffe {
 template <typename Dtype>
 void BaseRistrettoLayer<Dtype>::QuantizeWeights_gpu(
       vector<shared_ptr<Blob<Dtype> > > weights_quantized, const int rounding,
-      const bool bias_term) {
+      const bool bias_term, const bool scale) {
   Dtype* weight = weights_quantized[0]->mutable_gpu_data();
   const int cnt_weight = weights_quantized[0]->count();
   switch (precision_) {
@@ -16,12 +16,20 @@ void BaseRistrettoLayer<Dtype>::QuantizeWeights_gpu(
       Trim2MiniFloat_gpu(weights_quantized[1]->mutable_gpu_data(),
           weights_quantized[1]->count(), fp_mant_, fp_exp_, rounding);
     }
+    if (scale) {
+      Trim2MiniFloat_gpu(weights_quantized[2]->mutable_gpu_data(),
+          weights_quantized[2]->count(), fp_mant_, fp_exp_, rounding);
+    }
     break;
   case QuantizationParameter_Precision_DYNAMIC_FIXED_POINT:
     Trim2FixedPoint_gpu(weight, cnt_weight, bw_params_, rounding, fl_params_);
     if (bias_term) {
       Trim2FixedPoint_gpu(weights_quantized[1]->mutable_gpu_data(),
           weights_quantized[1]->count(), bw_params_, rounding, fl_params_);
+    }
+    if (scale) {
+      Trim2FixedPoint_gpu(weights_quantized[2]->mutable_gpu_data(),
+          weights_quantized[2]->count(), bw_params_, rounding, fl_params_);
     }
     break;
   case QuantizationParameter_Precision_INTEGER_POWER_OF_2_WEIGHTS:
@@ -146,10 +154,10 @@ void BaseRistrettoLayer<Dtype>::Trim2IntegerPowerOf2_gpu(Dtype* data,
 // Explicit instantiations
 template void BaseRistrettoLayer<double>::QuantizeWeights_gpu(
     vector<shared_ptr<Blob<double> > > weights_quantized, const int rounding,
-    const bool bias_term);
+    const bool bias_term, const bool scale);
 template void BaseRistrettoLayer<float>::QuantizeWeights_gpu(
     vector<shared_ptr<Blob<float> > > weights_quantized, const int rounding,
-    const bool bias_term);
+    const bool bias_term, const bool scale);
 template void BaseRistrettoLayer<double>::QuantizeLayerInputs_gpu(double* data,
     const int count);
 template void BaseRistrettoLayer<float>::QuantizeLayerInputs_gpu(float* data,

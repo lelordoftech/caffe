@@ -31,9 +31,9 @@ void DeconvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     this->QuantizeWeights_gpu(this->weights_quantized_, rounding,
         this->bias_term_);
 
-    weight = this->weights_quantized_[0]->cpu_data();
+    weight = this->weights_quantized_[0]->gpu_data();
   } else {
-    weight = this->blobs_[0]->cpu_data();
+    weight = this->blobs_[0]->gpu_data();
   }
 
   for (int i = 0; i < bottom.size(); ++i) {
@@ -45,9 +45,9 @@ void DeconvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       if (this->bias_term_) {
         const Dtype* bias = NULL;
         if (this->is_quantized_) {
-          bias = this->weights_quantized_[1]->cpu_data();
+          bias = this->weights_quantized_[1]->gpu_data();
         } else {
-          bias = this->blobs_[1]->cpu_data();
+          bias = this->blobs_[1]->gpu_data();
         }
         this->forward_gpu_bias(top_data + n * this->top_dim_, bias);
       }
@@ -55,7 +55,7 @@ void DeconvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 
     // Trim layer output
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_gpu(top[i]->mutable_cpu_data(), top[i]->count());
+      this->QuantizeLayerOutputs_gpu(top[i]->mutable_gpu_data(), top[i]->count());
     }
   }
 }
@@ -66,9 +66,9 @@ void DeconvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   // Trim weights
   const Dtype* weight = NULL;
   if (this->is_quantized_) {
-    weight = this->weights_quantized_[0]->cpu_data();
+    weight = this->weights_quantized_[0]->gpu_data();
   } else {
-    weight = this->blobs_[0]->cpu_data();
+    weight = this->blobs_[0]->gpu_data();
   }
 
   Dtype* weight_diff = this->blobs_[0]->mutable_gpu_diff();

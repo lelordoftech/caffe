@@ -160,7 +160,7 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   // Trim layer input
   if (this->is_quantized_) {
     if (this->phase_ == TEST) {
-      this->QuantizeLayerInputs_cpu(bottom[0]->mutable_gpu_data(), bottom[0]->count());
+      this->QuantizeLayerInputs_gpu(bottom[0]->mutable_gpu_data(), bottom[0]->count());
     }
   }
 
@@ -220,7 +220,7 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   // Trim layer output
   if (this->is_quantized_) {
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top[0]->mutable_gpu_data(), top[0]->count());
+      this->QuantizeLayerOutputs_gpu(top[0]->mutable_gpu_data(), top[0]->count());
     }
   }
   CUDA_POST_KERNEL_CHECK;

@@ -33,20 +33,20 @@ void ScaleLayer<Dtype>::Forward_gpu(
   if (this->is_quantized_) {
     if (this->phase_ == TEST) {
       for (int i = 0; i < bottom.size(); ++i) {
-        this->QuantizeLayerInputs_cpu(bottom[i]->mutable_cpu_data(), bottom[i]->count());
+        this->QuantizeLayerInputs_gpu(bottom[i]->mutable_gpu_data(), bottom[i]->count());
       }
     }
 
-    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->cpu_data(),
+    caffe_copy(this->blobs_[0]->count(), this->blobs_[0]->gpu_data(),
       this->weights_quantized_[0]->mutable_gpu_data());
     if (bias_layer_) {
-      caffe_copy(this->blobs_[bias_param_id_]->count(), this->blobs_[bias_param_id_]->cpu_data(),
+      caffe_copy(this->blobs_[bias_param_id_]->count(), this->blobs_[bias_param_id_]->gpu_data(),
         this->weights_quantized_[bias_param_id_]->mutable_gpu_data());
     }
 
     int rounding = this->phase_ == TEST ? this->rounding_ :
         QuantizationParameter_Rounding_STOCHASTIC;
-    this->QuantizeWeights_cpu(this->weights_quantized_, rounding, bias_layer_);
+    this->QuantizeWeights_gpu(this->weights_quantized_, rounding, bias_layer_ != NULL);
   }
 
   const int count = top[0]->count();
@@ -91,6 +91,13 @@ void ScaleLayer<Dtype>::Forward_gpu(
         <<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
         count, bottom_data, scale_data, scale_dim_, inner_dim_, top_data);
   }
+
+  // Trim layer output
+  if (this->is_quantized_) {
+    if (this->phase_ == TEST) {
+      this->QuantizeLayerOutputs_gpu(top[0]->mutable_gpu_data(), top[0]->count());
+    }
+  }
 }
 
 template <typename Dtype>
@@ -101,19 +108,7 @@ void ScaleLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     bias_layer_->Backward(top, bias_propagate_down_, bias_bottom_vec_);
   }
   const bool scale_param = (bottom.size() == 1);
-
-  // Trim scale
-  Blob<Dtype>* scale = NULL;
-  if (scale_param) {
-    if (this->is_quantized_) {
-      scale = this->weights_quantized_[0].get();
-    } else {
-      scale = this->blobs_[0].get();
-    }
-  } else {
-    scale = bottom[1];
-  }
-
+  Blob<Dtype>* scale = scale_param ? this->blobs_[0].get() : bottom[1];
   if ((!scale_param && propagate_down[1]) ||
       (scale_param && this->param_propagate_down_[0])) {
     const Dtype* top_diff = top[0]->gpu_diff();
@@ -172,7 +167,18 @@ void ScaleLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   if (propagate_down[0]) {
     const int count = top[0]->count();
     const Dtype* top_diff = top[0]->gpu_diff();
-    const Dtype* scale_data = scale->gpu_data();
+    // Trim scale
+    const Dtype* scale_data = NULL;
+    if (scale_param) {
+      if (this->is_quantized_) {
+        scale_data = this->weights_quantized_[0].get()->gpu_data();
+      } else {
+        scale_data = this->blobs_[0].get()->gpu_data();
+      }
+    } else {
+      scale_data = bottom[1]->gpu_data();
+    }
+
     Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
     ScaleForward<Dtype>  // NOLINT_NEXT_LINE(whitespace/operators)
         <<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(

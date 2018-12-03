@@ -30,9 +30,9 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     this->QuantizeWeights_gpu(this->weights_quantized_, rounding,
         this->bias_term_);
 
-    weight = this->weights_quantized_[0]->cpu_data();
+    weight = this->weights_quantized_[0]->gpu_data();
   } else {
-    weight = this->blobs_[0]->cpu_data();
+    weight = this->blobs_[0]->gpu_data();
   }
 
   // Do forward propagation
@@ -43,9 +43,9 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype* bias = NULL;
   if (bias_term_) {
     if (this->is_quantized_) {
-      bias = this->weights_quantized_[1]->cpu_data();
+      bias = this->weights_quantized_[1]->gpu_data();
     } else {
-      bias = this->blobs_[1]->cpu_data();
+      bias = this->blobs_[1]->gpu_data();
     }
   }
 
@@ -71,7 +71,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   // Trim layer output
   if (this->is_quantized_) {
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_gpu(top[0]->mutable_cpu_data(), top[0]->count());
+      this->QuantizeLayerOutputs_gpu(top[0]->mutable_gpu_data(), top[0]->count());
     }
   }
 }
@@ -110,9 +110,9 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     // Trim weights
     const Dtype* weight = NULL;
     if (this->is_quantized_) {
-      weight = this->weights_quantized_[0]->cpu_data();
+      weight = this->weights_quantized_[0]->gpu_data();
     } else {
-      weight = this->blobs_[0]->cpu_data();
+      weight = this->blobs_[0]->gpu_data();
     }
 
     if (transpose_) {

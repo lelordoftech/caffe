@@ -37,7 +37,7 @@ void EltwiseLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   if (this->is_quantized_) {
     if (this->phase_ == TEST) {
       for (int i = 0; i < bottom.size(); ++i) {
-        this->QuantizeLayerInputs_cpu(bottom[i]->mutable_cpu_data(), bottom[i]->count());
+        this->QuantizeLayerInputs_gpu(bottom[i]->mutable_gpu_data(), bottom[i]->count());
       }
     }
   }
@@ -78,7 +78,7 @@ void EltwiseLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   // Trim layer output
   if (this->is_quantized_) {
     if (this->phase_ == TEST) {
-      this->QuantizeLayerOutputs_cpu(top[0]->mutable_cpu_data(), top[0]->count());
+      this->QuantizeLayerOutputs_gpu(top[0]->mutable_gpu_data(), top[0]->count());
     }
   }
 }

@@ -157,7 +157,7 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
     int rounding = this->phase_ == TEST ? this->rounding_ :
         QuantizationParameter_Rounding_STOCHASTIC;
-    this->QuantizeWeights_cpu(this->weights_quantized_, rounding, true);
+    this->QuantizeWeights_cpu(this->weights_quantized_, rounding, true, true);
 
     weight = this->weights_quantized_[0]->cpu_data();
     bias = this->weights_quantized_[1]->cpu_data();
